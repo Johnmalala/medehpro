@@ -94,16 +94,16 @@ const Reports: React.FC = () => {
       .slice(0, 5);
 
     const cashierSales = filteredSales.reduce((acc, sale) => {
-      const cashier = staff.find(s => s.id === sale.staff_id);
-      if (!acc[sale.staff_id]) {
-        acc[sale.staff_id] = {
+      const cashier = staff.find(s => s.id === sale.cashier_id);
+      if (!acc[sale.cashier_id]) {
+        acc[sale.cashier_id] = {
           cashierName: cashier?.name || 'Unknown Staff',
           sales: 0,
           revenue: 0,
         };
       }
-      acc[sale.staff_id].sales += 1;
-      acc[sale.staff_id].revenue += sale.total_amount;
+      acc[sale.cashier_id].sales += 1;
+      acc[sale.cashier_id].revenue += sale.total_amount;
       return acc;
     }, {} as Record<string, { cashierName: string; sales: number; revenue: number }>);
 
@@ -132,7 +132,7 @@ const Reports: React.FC = () => {
       cashierPerformance: reportData.cashierPerformance,
       detailedSales: reportData.filteredSales.map(s => {
         const product = products.find(p => p.id === s.product_id);
-        const cashier = staff.find(st => st.id === s.staff_id);
+        const cashier = staff.find(st => st.id === s.cashier_id);
         return { ...s, productName: product?.name, cashierName: cashier?.name };
       }),
     };
@@ -212,10 +212,10 @@ const Reports: React.FC = () => {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {reportData.filteredSales.slice(0, 50).map((sale) => {
                 const product = products.find(p => p.id === sale.product_id);
-                const cashier = staff.find(s => s.id === sale.staff_id);
+                const cashier = staff.find(s => s.id === sale.cashier_id);
                 return (
                   <tr key={sale.id}>
-                    <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{format(parseISO(sale.date), 'MMM dd, yyyy')}</div><div className="text-sm text-gray-500 dark:text-gray-400">{format(new Date(sale.created_at), 'HH:mm')}</div></td>
+                    <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{format(parseISO(sale.date), 'MMM dd, yyyy')}</div><div className="text-sm text-gray-500 dark:text-gray-400">{sale.time ? sale.time.slice(0, 5) : format(new Date(sale.created_at), 'HH:mm')}</div></td>
                     <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">{product?.name || 'N/A'}</div></td>
                     <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{sale.quantity}</div></td>
                     <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">KES {sale.total_amount.toLocaleString()}</div></td>

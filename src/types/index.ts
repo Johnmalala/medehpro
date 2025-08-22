@@ -30,16 +30,19 @@ export interface Product {
 export interface Sale {
   id: string;
   product_id: string;
+  product_name: string;
+  cashier_id: string;
+  cashier_name: string;
   staff_id: string;
   customer_name?: string;
   quantity: number;
   unit_price: number;
   total_amount: number;
   date: string;
+  time: string;
   created_at: string;
   // Joined data
-  products?: { name: string };
-  staff?: { name: string };
+  cashier?: { name: string };
 }
 
 export interface AuthState {

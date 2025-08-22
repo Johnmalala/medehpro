@@ -15,7 +15,6 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      const today = format(new Date(), 'yyyy-MM-dd');
       const sevenDaysAgo = format(subDays(new Date(), 6), 'yyyy-MM-dd');
 
       const { data: productsData, error: productsError } = await supabase
@@ -24,7 +23,7 @@ const Dashboard: React.FC = () => {
 
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('*, products(name), staff:staff!sales_staff_id_fkey(name)')
+        .select('*, cashier:staff!sales_cashier_id_fkey(name)')
         .gte('date', sevenDaysAgo)
         .order('created_at', { ascending: false });
 
@@ -146,10 +145,10 @@ const Dashboard: React.FC = () => {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {sales.slice(0, 5).map((sale) => (
                 <tr key={sale.id}>
-                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">{sale.products?.name}</div></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">{sale.product_name}</div></td>
                   <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">KES {sale.total_amount.toLocaleString()}</div></td>
-                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{sale.staff?.name}</div></td>
-                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-500 dark:text-gray-400">{format(new Date(sale.created_at), 'HH:mm')}</div></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{sale.cashier_name || sale.cashier?.name}</div></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-500 dark:text-gray-400">{sale.time ? sale.time.slice(0, 5) : format(new Date(sale.created_at), 'HH:mm')}</div></td>
                 </tr>
               ))}
             </tbody>

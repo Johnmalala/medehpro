@@ -17,16 +17,19 @@ const Sales: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   
+  // Form state
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [customerName, setCustomerName] = useState('');
   const [editableUnitPrice, setEditableUnitPrice] = useState<number | null>(null);
   const [quantityError, setQuantityError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchSales = useCallback(async () => {
     const { data, error } = await supabase
       .from('sales')
-      .select('*, products(name), staff:staff!sales_staff_id_fkey(name)')
+      .select('*, cashier:staff!sales_cashier_id_fkey(name)')
       .order('created_at', { ascending: false });
     if (error) console.error("Error fetching sales:", error);
     else setSales(data || []);
@@ -51,9 +54,10 @@ const Sales: React.FC = () => {
 
   const filteredSales = useMemo(() => {
     return sales.filter(sale => {
-      const matchesSearch = sale.products?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           sale.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           sale.staff?.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const cashierName = sale.cashier_name || sale.cashier?.name || '';
+      const matchesSearch = sale.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (sale.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           cashierName.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDate = !dateFilter || sale.date === dateFilter;
       return matchesSearch && matchesDate;
     });
@@ -61,50 +65,71 @@ const Sales: React.FC = () => {
 
   const handleNewSale = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const product = products.find(p => p.id === selectedProduct);
-    if (!product || !user || !user.staff_id || editableUnitPrice === null || quantityError) {
-      alert('Error: Please correct the form errors before submitting.');
-      return;
+    setIsSubmitting(true);
+    setFormError('');
+
+    try {
+      const product = products.find(p => p.id === selectedProduct);
+      if (!product || !user?.staff_id || !user.name || editableUnitPrice === null) {
+        throw new Error('Please fill out all required fields correctly.');
+      }
+      if (quantityError) throw new Error(quantityError);
+      if (quantity <= 0) throw new Error('Quantity must be greater than 0.');
+      if (editableUnitPrice < product.buying_price) {
+        throw new Error('Selling price cannot be lower than the buying price.');
+      }
+
+      const newSaleData = {
+        product_id: product.id,
+        product_name: product.name,
+        cashier_id: user.staff_id,
+        cashier_name: user.name,
+        staff_id: user.staff_id,
+        quantity,
+        unit_price: editableUnitPrice,
+        total_amount: quantity * editableUnitPrice,
+        customer_name: customerName || null,
+        date: format(new Date(), 'yyyy-MM-dd'),
+        time: format(new Date(), 'HH:mm:ss'),
+      };
+
+      const { error: saleError } = await supabase.from('sales').insert(newSaleData);
+      if (saleError) throw saleError;
+
+      const newQuantity = product.quantity - quantity;
+      const { error: productUpdateError } = await supabase
+        .from('products')
+        .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+        .eq('id', product.id);
+
+      if (productUpdateError) {
+        alert('Sale recorded, but failed to update stock count. Please manually adjust.');
+        console.error(productUpdateError);
+      }
+
+      setProducts(products.map(p => p.id === product.id ? { ...p, quantity: newQuantity } : p));
+      await fetchSales();
+      closeModal();
+
+    } catch (error: any) {
+      console.error('Sale submission error:', error);
+      let errorMessage = 'Failed to record sale. Please try again.';
+      // Check if it's a Supabase/PostgREST error object
+      if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = `Error: ${error.message}`;
+        if ('details' in error && error.details) {
+          errorMessage += ` Details: ${error.details}`;
+        }
+        if ('hint' in error && error.hint) {
+          errorMessage += ` Hint: ${error.hint}`;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      setFormError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (editableUnitPrice < product.buying_price) {
-      alert('Error: Selling price cannot be lower than the buying price.');
-      return;
-    }
-
-    const newSaleData = {
-      product_id: product.id,
-      staff_id: user.staff_id,
-      quantity,
-      unit_price: editableUnitPrice,
-      total_amount: quantity * editableUnitPrice,
-      customer_name: customerName || null,
-      date: format(new Date(), 'yyyy-MM-dd'),
-    };
-
-    const { error: saleError } = await supabase.from('sales').insert(newSaleData);
-
-    if (saleError) {
-      alert('Failed to record sale. Please try again.');
-      console.error(saleError);
-      return;
-    }
-
-    const newQuantity = product.quantity - quantity;
-    const { error: productUpdateError } = await supabase
-      .from('products')
-      .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-      .eq('id', product.id);
-
-    if (productUpdateError) {
-      alert('Sale recorded, but failed to update stock count. Please manually adjust.');
-      console.error(productUpdateError);
-    }
-
-    setProducts(products.map(p => p.id === product.id ? { ...p, quantity: newQuantity } : p));
-    await fetchSales();
-    closeModal();
   };
 
   const handleProductSelect = (productId: string) => {
@@ -123,7 +148,9 @@ const Sales: React.FC = () => {
     const numValue = parseInt(value, 10) || 0;
     setQuantity(numValue);
     const product = products.find(p => p.id === selectedProduct);
-    if (product && numValue > product.quantity) {
+    if (numValue <= 0) {
+      setQuantityError('Quantity must be greater than 0.');
+    } else if (product && numValue > product.quantity) {
       setQuantityError(`Only ${product.quantity} available in stock.`);
     } else {
       setQuantityError('');
@@ -137,6 +164,8 @@ const Sales: React.FC = () => {
     setCustomerName('');
     setEditableUnitPrice(null);
     setQuantityError('');
+    setFormError('');
+    setIsSubmitting(false);
   };
 
   const currentSelectedProduct = useMemo(() => {
@@ -194,7 +223,14 @@ const Sales: React.FC = () => {
               </div>
               <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Customer Name (Optional)</label><input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white" placeholder="Enter customer name" /></div>
               {currentSelectedProduct && editableUnitPrice !== null && (<div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3"><div className="text-sm"><p className="font-medium text-blue-800 dark:text-blue-200">Total Amount: KES {(editableUnitPrice * quantity).toLocaleString()}</p></div></div>)}
-              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4"><button type="button" onClick={closeModal} className="w-full sm:w-auto flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button><button type="submit" disabled={!!quantityError || !selectedProduct} className="w-full sm:w-auto flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">Record Sale</button></div>
+              
+              {formError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mt-4">
+                  <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4"><button type="button" onClick={closeModal} className="w-full sm:w-auto flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button><button type="submit" disabled={!!quantityError || !selectedProduct || isSubmitting} className="w-full sm:w-auto flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">{isSubmitting ? 'Recording...' : 'Record Sale'}</button></div>
             </form>
           </div>
         </div>
@@ -223,11 +259,11 @@ const Sales: React.FC = () => {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {filteredSales.map((sale) => (
                 <tr key={sale.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{format(new Date(sale.date), 'MMM dd, yyyy')}</div><div className="text-sm text-gray-500 dark:text-gray-400">{format(new Date(sale.created_at), 'HH:mm:ss')}</div></td>
-                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">{sale.products?.name}</div></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{format(new Date(sale.date), 'MMM dd, yyyy')}</div><div className="text-sm text-gray-500 dark:text-gray-400">{sale.time}</div></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">{sale.product_name}</div></td>
                   <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{sale.quantity}</div></td>
                   <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">KES {sale.total_amount.toLocaleString()}</div></td>
-                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{sale.staff?.name}</div></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 dark:text-white">{sale.cashier_name || sale.cashier?.name}</div></td>
                 </tr>
               ))}
             </tbody>
