@@ -1,53 +1,84 @@
-import { useState, useEffect } from 'react';
-import { User, AuthState } from '../types';
-
-const DEMO_USERS = [
-  { id: '1', name: 'Ahmed Mohammed', email: 'ahmed@madehhardware.com', role: 'Owner' as const, createdAt: '2024-01-01' },
-  { id: '2', name: 'Fatima Hassan', email: 'fatima@madehhardware.com', role: 'Manager' as const, createdAt: '2024-01-15' },
-  { id: '3', name: 'Omar Said', email: 'omar@madehhardware.com', role: 'Cashier' as const, createdAt: '2024-02-01' },
-  { id: '4', name: 'Staff Member', email: 'staff@madehhardware.com', role: 'Owner' as const, createdAt: '2024-01-01' },
-];
+import { useState, useEffect, useCallback } from 'react';
+import { AuthUser, AuthState } from '../types';
+import { supabase } from '../lib/supabase';
+import { AuthError, Session } from '@supabase/supabase-js';
 
 export const useAuth = () => {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
+    isLoading: true,
   });
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem('madeh_user');
-    if (savedUser) {
-      const user = JSON.parse(savedUser);
-      setAuthState({ user, isAuthenticated: true });
+  const fetchSession = useCallback(async (session: Session | null) => {
+    if (session?.user) {
+      const { data: staffData, error } = await supabase
+        .from('staff')
+        .select('id, name, role')
+        .eq('email', session.user.email)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching staff profile:', error);
+      }
+      
+      if (staffData) {
+        const appUser: AuthUser = {
+          id: session.user.id,
+          email: session.user.email,
+          name: staffData.name,
+          role: staffData.role,
+          staff_id: staffData.id,
+        };
+        setAuthState({ user: appUser, isAuthenticated: true, isLoading: false });
+      } else {
+        const appUser: AuthUser = {
+          id: session.user.id,
+          email: session.user.email,
+        };
+        setAuthState({ user: appUser, isAuthenticated: true, isLoading: false });
+      }
+    } else {
+      setAuthState({ user: null, isAuthenticated: false, isLoading: false });
     }
   }, []);
 
-  const login = (email: string, password: string): boolean => {
-    // Demo login - simplified to accept any email/password combination
-    if (email && password) {
-      const user = DEMO_USERS.find(u => u.email === email) || {
-        id: '4',
-        name: email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1),
-        email,
-        role: 'Owner' as const,
-        createdAt: new Date().toISOString(),
-      };
-      
-      localStorage.setItem('madeh_user', JSON.stringify(user));
-      setAuthState({ user, isAuthenticated: true });
-      return true;
-    }
-    return false;
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetchSession(session);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        fetchSession(session);
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [fetchSession]);
+
+  const refreshUser = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetchSession(session);
+  }, [fetchSession]);
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; error: AuthError | null }> => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    return { success: !error, error };
   };
 
-  const logout = () => {
-    localStorage.removeItem('madeh_user');
-    setAuthState({ user: null, isAuthenticated: false });
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setAuthState({ user: null, isAuthenticated: false, isLoading: false });
   };
 
-  // All users now have access to everything
   const hasPermission = (): boolean => {
-    return true;
+    return true; // Simplified for now
   };
 
   return {
@@ -55,5 +86,6 @@ export const useAuth = () => {
     login,
     logout,
     hasPermission,
+    refreshUser,
   };
 };

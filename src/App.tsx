@@ -1,19 +1,25 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import LoginForm from './components/Auth/LoginForm';
 import Layout from './components/Layout/Layout';
-import Dashboard from './pages/Dashboard';
-import Sales from './pages/Sales';
-import Stock from './pages/Stock';
-import Reports from './pages/Reports';
-import Analytics from './pages/Analytics';
-import Staff from './pages/Staff';
+import Loader from './components/Layout/Loader';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Sales = lazy(() => import('./pages/Sales'));
+const Stock = lazy(() => import('./pages/Stock'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const Staff = lazy(() => import('./pages/Staff'));
 
 function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const { isDark } = useTheme();
+
+  if (isLoading) {
+    return <Loader />;
+  }
 
   if (!isAuthenticated) {
     return <LoginForm />;
@@ -22,16 +28,18 @@ function App() {
   return (
     <Router>
       <div className={isDark ? 'dark' : ''}>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="sales" element={<Sales />} />
-            <Route path="stock" element={<Stock />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="staff" element={<Staff />} />
-          </Route>
-        </Routes>
+        <Suspense fallback={<Loader />}>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="sales" element={<Sales />} />
+              <Route path="stock" element={<Stock />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="staff" element={<Staff />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </div>
     </Router>
   );
