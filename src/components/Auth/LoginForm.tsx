@@ -19,17 +19,16 @@ const LoginForm: React.FC = () => {
     const success = login(email, password);
     
     if (!success) {
-      setError('Invalid email or password');
+      setError('Please enter both email and password');
     }
     
     setIsLoading(false);
   };
 
-  const demoAccounts = [
-    { role: 'Owner', email: 'ahmed@madehhardware.com' },
-    { role: 'Manager', email: 'fatima@madehhardware.com' },
-    { role: 'Cashier', email: 'omar@madehhardware.com' },
-  ];
+  const quickLogin = () => {
+    setEmail('staff@madehhardware.com');
+    setPassword('password123');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
@@ -103,22 +102,19 @@ const LoginForm: React.FC = () => {
           </form>
 
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Demo Accounts (Password: password123):</p>
-            <div className="space-y-2">
-              {demoAccounts.map((account) => (
-                <button
-                  key={account.role}
-                  onClick={() => {
-                    setEmail(account.email);
-                    setPassword('password123');
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                >
-                  <span className="font-medium text-gray-900 dark:text-white">{account.role}</span>
-                  <span className="text-gray-500 dark:text-gray-400 ml-2">{account.email}</span>
-                </button>
-              ))}
-            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Quick Access (All features available):
+            </p>
+            <button
+              onClick={quickLogin}
+              className="w-full text-left px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
+            >
+              <span className="font-medium text-gray-900 dark:text-white">Demo Login</span>
+              <span className="text-gray-500 dark:text-gray-400 ml-2">staff@madehhardware.com</span>
+            </button>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Password: password123 (or use any email/password combination)
+            </p>
           </div>
         </div>
       </div>

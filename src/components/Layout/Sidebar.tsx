@@ -9,56 +9,45 @@ import {
   TrendingUp,
   AlertTriangle
 } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
 
 const Sidebar: React.FC = () => {
-  const { hasPermission } = useAuth();
-
   const navItems = [
     {
       name: 'Dashboard',
       href: '/',
       icon: LayoutDashboard,
-      roles: ['Owner', 'Manager', 'Cashier'],
     },
     {
       name: 'Sales',
       href: '/sales',
       icon: ShoppingCart,
-      roles: ['Owner', 'Manager', 'Cashier'],
     },
     {
       name: 'Stock',
       href: '/stock',
       icon: Package,
-      roles: ['Owner', 'Manager', 'Cashier'],
     },
     {
       name: 'Reports',
       href: '/reports',
       icon: FileText,
-      roles: ['Owner', 'Manager'],
     },
     {
       name: 'Analytics',
       href: '/analytics',
       icon: TrendingUp,
-      roles: ['Owner', 'Manager'],
     },
     {
       name: 'Staff',
       href: '/staff',
       icon: Users,
-      roles: ['Owner'],
     },
   ];
-
-  const filteredNavItems = navItems.filter(item => hasPermission(item.roles));
 
   return (
     <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm border-r border-gray-200 dark:border-gray-700 min-h-screen">
       <nav className="p-4 space-y-2">
-        {filteredNavItems.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
